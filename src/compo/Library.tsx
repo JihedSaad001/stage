@@ -1,17 +1,50 @@
 import React, { useState, useEffect } from "react";
 
+// Mock backend functions
+const mockBackend = {
+  files: [], // No initial mock files
+  async uploadFile(file, language) {
+    // Simulate a network request
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        this.files.push({
+          name: file.name,
+          type: file.type,
+          language,
+          content: URL.createObjectURL(file),
+        });
+        resolve({ status: "success" });
+      }, 1000);
+    });
+  },
+  async getFiles() {
+    // Simulate fetching files from a server
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(this.files);
+      }, 1000);
+    });
+  },
+};
+
 const Library: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<string>("eng");
-  const [backendUrl, setBackendUrl] = useState<string>("");
+  const [files, setFiles] = useState<
+    { name: string; type: string; language: string; content: string }[]
+  >([]);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [selectedFileToView, setSelectedFileToView] = useState<string | null>(
+    null
+  );
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [iframeWidth, setIframeWidth] = useState<string>("100%");
+  const [iframeHeight, setIframeHeight] = useState<string>("700px");
 
   useEffect(() => {
-    // Load configuration file or set backend URL
-    fetch("/config.json")
-      .then((response) => response.json())
-      .then((data) => setBackendUrl(data.backendUrl))
-      .catch((error) => console.error("Error loading config:", error));
+    // Fetch files on mount
+    mockBackend.getFiles().then(setFiles);
   }, []);
 
   const handleAddDocument = () => {
@@ -20,7 +53,7 @@ const Library: React.FC = () => {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedFile(null); // Reset selected file when modal closes
+    setSelectedFile(null);
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,36 +75,51 @@ const Library: React.FC = () => {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file_type", selectedFile.type); // File type
-    console.log(selectedFile.type);
-    formData.append("language", selectedLanguage); // Language
-    console.log(selectedLanguage);
-    formData.append("file", selectedFile); // File object
-
-    console.log(formData);
-
     try {
-      const response = await fetch(`${backendUrl}/add_file`, {
-        method: "POST",
-        body: formData,
-      });
+      // Prevent multiple uploads by disabling the button during upload
+      setIsModalOpen(false); // Close modal to prevent re-triggering
+      const response = await mockBackend.uploadFile(
+        selectedFile,
+        selectedLanguage
+      );
 
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
+      if (response.status === "success") {
+        // Update state with the newly uploaded file
+        setFiles([
+          ...files,
+          {
+            name: selectedFile.name,
+            type: selectedFile.type,
+            language: selectedLanguage,
+            content: URL.createObjectURL(selectedFile),
+          },
+        ]);
+
+        // Reset selectedFile state to prevent multiple uploads
+        setSelectedFile(null);
+        setSelectedLanguage("eng"); // Reset language selection if needed
       }
-
-      const data = await response.json();
-      console.log("File upload status:", data.status);
-
-      // Reset state and close modal after successful upload
-      setSelectedFile(null);
-      setSelectedLanguage("eng");
-      setIsModalOpen(false);
     } catch (error) {
-      console.error("There was a problem with the fetch operation:", error);
-      // Handle error state as needed
+      console.error("Upload failed:", error);
     }
+  };
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const filteredFiles = files.filter((file) =>
+    file.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleFileClick = (file: { name: string; content: string }) => {
+    setSelectedFileToView(file.content);
+    setSelectedFileName(file.name); // Track the selected file name
+  };
+
+  const handleCloseFileView = () => {
+    setSelectedFileToView(null); // Close the file viewer
+    setSelectedFileName(null); // Reset selected file name
   };
 
   return (
@@ -85,31 +133,66 @@ const Library: React.FC = () => {
         >
           + Add Document
         </button>
-        <ul className="flex flex-col gap-2">
-          {[
-            "Category 1",
-            "Category 2",
-            "Category 3",
-            "Category 4",
-            "Category 5",
-          ].map((category, index) => (
-            <li key={index} className="group relative">
-              <div className="hover:bg-green-500 hover:text-white p-2 rounded cursor-pointer relative">
-                {category}
-                <ul className="absolute left-full top-0 mt-2 ml-0.5 bg-gray-700 rounded shadow-lg w-48 hidden group-hover:block">
-                  <li className="hover:bg-gray-600 p-2 rounded">Option 1</li>
-                  <li className="hover:bg-gray-600 p-2 rounded">Option 2</li>
-                  <li className="hover:bg-gray-600 p-2 rounded">Option 3</li>
-                </ul>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <input
+          type="text"
+          placeholder="Search..."
+          value={searchTerm}
+          onChange={handleSearchChange}
+          className="mb-4 p-2 rounded"
+        />
       </div>
       {/* Main Content */}
       <div className="flex-1 p-4 bg-gray-700">
-        <h2 className="text-2xl text-white">Content page</h2>
-        <p className="text-white">This is the content page</p>
+        <h2 className="text-2xl text-white">Files</h2>
+        <ul className="text-white">
+          {filteredFiles.map((file, index) => (
+            <li
+              key={index}
+              className="mb-2 cursor-pointer"
+              onClick={() => handleFileClick(file)}
+            >
+              {file.name}
+              {selectedFileName === file.name && (
+                <div className="bg-gray-900 p-4 mt-4 rounded shadow-lg">
+                  <iframe
+                    src={selectedFileToView}
+                    width={iframeWidth}
+                    height={iframeHeight}
+                    title="File Viewer"
+                  ></iframe>
+                  <div className="flex justify-between mt-2">
+                    <button
+                      className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded"
+                      onClick={handleCloseFileView} // Close button handler
+                    >
+                      Close
+                    </button>
+                    <div>
+                      <label className="mr-2 text-gray-500 font-bold text-lg">
+                        Width:
+                        <input
+                          type="text"
+                          value={iframeWidth}
+                          onChange={(e) => setIframeWidth(e.target.value)}
+                          className="ml-1 p-1 rounded"
+                        />
+                      </label>
+                      <label className="text-gray-500 font-bold text-lg">
+                        Height:
+                        <input
+                          type="text"
+                          value={iframeHeight}
+                          onChange={(e) => setIframeHeight(e.target.value)}
+                          className="ml-1 p-1 rounded"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
       {/* Modal for adding a document */}
       {isModalOpen && (
