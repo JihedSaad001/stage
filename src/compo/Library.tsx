@@ -10,6 +10,8 @@ const Library: React.FC<LibraryProps> = ({ backendUrl }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
   const [files, setFiles] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false); // Loading indicator
+  const [uploadStatus, setUploadStatus] = useState<string>("");
 
   useEffect(() => {
     fetchFiles();
@@ -20,7 +22,7 @@ const Library: React.FC<LibraryProps> = ({ backendUrl }) => {
       const entries = await readDir('src/assets/files', { recursive: false });
       const fileNames = entries.map(entry => entry.name);
       setFiles(fileNames as string[]);
-    } catch (error) {
+    } catch (error: any) { // Use 'any' type assertion here
       console.error("Error fetching files:", error);
     }
   };
@@ -45,40 +47,43 @@ const Library: React.FC<LibraryProps> = ({ backendUrl }) => {
     setSelectedLanguage(event.target.value);
   };
 
-  
-      const handleUpload = async () => {
-        if (!selectedFile) {
-          console.error("No file selected");
-          return;
-        }
-      
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-        formData.append("file_type", selectedFile.type);
-        formData.append("language", selectedLanguage);
-      
-        try {
-          const response = await fetch(`${backendUrl}/add_file`, {
-            method: "POST",
-            body: formData,
-          });
-      
-          if (!response.ok) {
-            throw new Error("Network response was not ok");
-          }
-      
-          const data = await response.json();
-          console.log("File upload status:", data.status);
-      
-          setSelectedFile(null);
-          setSelectedLanguage("en");
-          setIsModalOpen(false);
-          fetchFiles(); // Refresh the file list
-        } catch (error) {
-          console.error("There was a problem with the fetch operation:", error);
-        }
-      };
-      
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      console.error("No file selected");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("file_type", selectedFile.type);
+    formData.append("language", selectedLanguage);
+
+    try {
+      setIsLoading(true); // Set loading state to true during upload
+
+      const response = await fetch(`${backendUrl}/add_file`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+
+      const data = await response.json();
+      setUploadStatus(data.status); // Set upload status received from backend
+
+      setSelectedFile(null);
+      setSelectedLanguage("en");
+      setIsModalOpen(false);
+      fetchFiles(); // Refresh the file list
+    } catch (error: any) { // Use 'any' type assertion here
+      console.error("There was a problem with the fetch operation:", error);
+      setUploadStatus(`File upload failed: ${error.message}`);
+    } finally {
+      setIsLoading(false); // Reset loading state after upload completes (or fails)
+    }
+  };
 
   return (
     <div className="flex w-screen flex-1">
@@ -157,6 +162,28 @@ const Library: React.FC<LibraryProps> = ({ backendUrl }) => {
                 Upload
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex justify-center items-center">
+          <div className="bg-white p-8 rounded shadow-lg">
+            <h2 className="text-2xl">Uploading...</h2>
+          </div>
+        </div>
+      )}
+      {/* Status popup */}
+      {uploadStatus && (
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex justify-center items-center">
+          <div className="bg-white p-8 rounded shadow-lg">
+            <h2 className="text-2xl">{uploadStatus}</h2>
+            <button
+              className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded mt-4"
+              onClick={() => setUploadStatus("")}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
