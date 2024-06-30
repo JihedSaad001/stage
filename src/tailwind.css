@@ -12,5 +12,16 @@
       transition-all duration-200 ease-linear
       cursor-pointer shadow-lg;
   }
+  /* Add these custom styles to your CSS file or within a style tag in your component file if you're using CSS-in-JS */
+.rtl-text {
+  direction: rtl;
+  text-align: right;
+}
+
+.ltr-text {
+  direction: ltr;
+  text-align: left;
+}
+
   
 }

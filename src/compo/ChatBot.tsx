@@ -1,29 +1,21 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
 interface Message {
   message: string;
   type: "text" | "source";
+  lang?: "en" | "ar" | "fr"; // Include "fr" for French
 }
 
-const ChatBot: React.FC = () => {
+const ChatBot: React.FC<{ backendUrl: string }> = ({ backendUrl }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState<string>("");
-  const [backendUrl, setBackendUrl] = useState<string>("");
-
-  useEffect(() => {
-    // Load configuration file
-    fetch("/config.json")
-      .then((response) => response.json())
-      .then((data) => setBackendUrl(data.backendUrl))
-      .catch((error) => console.error("Error loading config:", error));
-  }, []);
 
   const handleSendMessage = async () => {
     if (input.trim() !== "") {
       const userMessage = input;
       setMessages((prevMessages) => [
         ...prevMessages,
-        { message: userMessage, type: "text" },
+        { message: userMessage, type: "text", lang: "en" },
       ]);
       setInput("");
 
@@ -42,15 +34,23 @@ const ChatBot: React.FC = () => {
 
         const data = await response.json();
 
-        // Prepare messages array with both English and Arabic versions and source
+        // Prepare messages array with English, Arabic, and French versions if available
         const englishMessage: Message = {
           message: `English Version: ${data.english_version}`,
           type: "text",
+          lang: "en",
         };
         const arabicMessage: Message = {
           message: `Arabic Version: ${data.arabic_version}`,
           type: "text",
+          lang: "ar",
         };
+        const frenchMessage: Message = {
+          message: `French Version: ${data.french_version || "Not available"}`,
+          type: "text",
+          lang: "fr",
+        };
+
         const sourceMessage: Message = {
           message: `Source: ${data.source.source}`,
           type: "source",
@@ -60,6 +60,7 @@ const ChatBot: React.FC = () => {
           ...prevMessages,
           englishMessage,
           arabicMessage,
+          frenchMessage,
           sourceMessage,
         ]);
       } catch (error) {
@@ -102,7 +103,7 @@ const ChatBot: React.FC = () => {
                 <p
                   className={`text-white ${
                     message.type === "source" && "text-blue-400"
-                  }`}
+                  } ${message.lang === "ar" ? "rtl-text" : "ltr-text"}`}
                 >
                   {message.message}
                 </p>

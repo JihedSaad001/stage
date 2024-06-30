@@ -1,18 +1,29 @@
 import React, { useState, useEffect } from "react";
+import { readDir } from '@tauri-apps/api/fs';
 
-const Library: React.FC = () => {
+interface LibraryProps {
+  backendUrl: string;
+}
+
+const Library: React.FC<LibraryProps> = ({ backendUrl }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("eng");
-  const [backendUrl, setBackendUrl] = useState<string>("");
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
+  const [files, setFiles] = useState<string[]>([]);
 
   useEffect(() => {
-    // Load configuration file or set backend URL
-    fetch("/config.json")
-      .then((response) => response.json())
-      .then((data) => setBackendUrl(data.backendUrl))
-      .catch((error) => console.error("Error loading config:", error));
+    fetchFiles();
   }, []);
+
+  const fetchFiles = async () => {
+    try {
+      const entries = await readDir('src/assets/files', { recursive: false });
+      const fileNames = entries.map(entry => entry.name);
+      setFiles(fileNames as string[]);
+    } catch (error) {
+      console.error("Error fetching files:", error);
+    }
+  };
 
   const handleAddDocument = () => {
     setIsModalOpen(true);
@@ -30,49 +41,44 @@ const Library: React.FC = () => {
     }
   };
 
-  const handleLanguageChange = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
+  const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedLanguage(event.target.value);
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      console.error("No file selected");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file_type", selectedFile.type); // File type
-    console.log(selectedFile.type);
-    formData.append("language", selectedLanguage); // Language
-    console.log(selectedLanguage);
-    formData.append("file", selectedFile); // File object
-
-    console.log(formData);
-
-    try {
-      const response = await fetch(`${backendUrl}/add_file`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Network response was not ok");
-      }
-
-      const data = await response.json();
-      console.log("File upload status:", data.status);
-
-      // Reset state and close modal after successful upload
-      setSelectedFile(null);
-      setSelectedLanguage("eng");
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error("There was a problem with the fetch operation:", error);
-      // Handle error state as needed
-    }
-  };
+  
+      const handleUpload = async () => {
+        if (!selectedFile) {
+          console.error("No file selected");
+          return;
+        }
+      
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        formData.append("file_type", selectedFile.type);
+        formData.append("language", selectedLanguage);
+      
+        try {
+          const response = await fetch(`${backendUrl}/add_file`, {
+            method: "POST",
+            body: formData,
+          });
+      
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+      
+          const data = await response.json();
+          console.log("File upload status:", data.status);
+      
+          setSelectedFile(null);
+          setSelectedLanguage("en");
+          setIsModalOpen(false);
+          fetchFiles(); // Refresh the file list
+        } catch (error) {
+          console.error("There was a problem with the fetch operation:", error);
+        }
+      };
+      
 
   return (
     <div className="flex w-screen flex-1">
@@ -109,7 +115,13 @@ const Library: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 p-4 bg-gray-700">
         <h2 className="text-2xl text-white">Content page</h2>
-        <p className="text-white">This is the content page</p>
+        <ul className="text-white">
+          {files.map((file, index) => (
+            <li key={index} className="hover:underline cursor-pointer">
+              {file}
+            </li>
+          ))}
+        </ul>
       </div>
       {/* Modal for adding a document */}
       {isModalOpen && (
@@ -118,7 +130,7 @@ const Library: React.FC = () => {
             <h2 className="text-2xl mb-4">Add New Document</h2>
             <input
               type="file"
-              accept=".csv,.docx,.pdf" // Limit file types to CSV, DOCX, PDF
+              accept=".csv,.docx,.pdf,.txt" // Limit file types to CSV, DOCX, PDF
               onChange={handleFileChange}
               className="mb-4"
             />
@@ -127,7 +139,7 @@ const Library: React.FC = () => {
               onChange={handleLanguageChange}
               className="bg-gray-200 p-2 rounded"
             >
-              <option value="eng">English</option>
+              <option value="en">English</option>
               <option value="arabic">Arabic</option>
             </select>
             <div className="flex justify-end mt-4">

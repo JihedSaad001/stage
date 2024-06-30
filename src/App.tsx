@@ -1,10 +1,11 @@
 // App.tsx
+import { Routes, Route } from "react-router-dom";
 import SideBar from "./compo/SideBar";
 import Library from "./compo/Library";
-
 import ChatBot from "./compo/ChatBot";
 import Welcome from "./compo/Welcome";
-import { Routes, Route } from "react-router-dom";
+
+const backendUrl = "http://192.168.1.107:8000";
 
 function App() {
   return (
@@ -12,8 +13,11 @@ function App() {
       <SideBar />
       <Routes>
         <Route path="/" element={<Welcome />} />
-        <Route path="/compo/library" element={<Library />} />
-        <Route path="/compo/chatbot" element={<ChatBot />} />
+        <Route path="/compo/library" element={<Library backendUrl={backendUrl} />} />
+        <Route
+          path="/compo/chatbot"
+          element={<ChatBot backendUrl={backendUrl} />}
+        />
       </Routes>
     </div>
   );
