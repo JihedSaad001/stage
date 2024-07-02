@@ -1,51 +1,50 @@
 import React, { useState, useEffect } from "react";
+import { readDir } from "@tauri-apps/api/fs";
 
-// Mock backend functions
-const mockBackend = {
-  files: [], // No initial mock files
-  async uploadFile(file, language) {
-    // Simulate a network request
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        this.files.push({
-          name: file.name,
-          type: file.type,
-          language,
-          content: URL.createObjectURL(file),
-        });
-        resolve({ status: "success" });
-      }, 1000);
-    });
-  },
-  async getFiles() {
-    // Simulate fetching files from a server
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(this.files);
-      }, 1000);
-    });
-  },
-};
+interface LibraryProps {
+  backendUrl: string;
+}
 
-const Library: React.FC = () => {
+const Library: React.FC<LibraryProps> = ({ backendUrl }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("eng");
-  const [files, setFiles] = useState<
-    { name: string; type: string; language: string; content: string }[]
-  >([]);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
+  const [files, setFiles] = useState<string[]>([]);
+  const [filteredFiles, setFilteredFiles] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedFileToView, setSelectedFileToView] = useState<string | null>(
-    null
-  );
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-  const [iframeWidth, setIframeWidth] = useState<string>("100%");
-  const [iframeHeight, setIframeHeight] = useState<string>("700px");
+  const [isLoading, setIsLoading] = useState(false); // Loading indicator
+  const [uploadStatus, setUploadStatus] = useState<string>("");
+  const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null); // State for selected PDF file URL
 
   useEffect(() => {
-    // Fetch files on mount
-    mockBackend.getFiles().then(setFiles);
+    fetchFiles();
   }, []);
+
+  useEffect(() => {
+    // Filter files based on search term
+    if (searchTerm.trim() === "") {
+      setFilteredFiles(files);
+    } else {
+      const filtered = files.filter((file) =>
+        file.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredFiles(filtered);
+    }
+  }, [searchTerm, files]);
+
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch(`${backendUrl}/get_files`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch files");
+      }
+      const data = await response.json();
+      setFiles(data.files);
+      setFilteredFiles(data.files);
+    } catch (error) {
+      console.error("Error fetching files:", error);
+    }
+  };
 
   const handleAddDocument = () => {
     setIsModalOpen(true);
@@ -53,7 +52,7 @@ const Library: React.FC = () => {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedFile(null);
+    setSelectedFile(null); // Reset selected file when modal closes
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,51 +74,53 @@ const Library: React.FC = () => {
       return;
     }
 
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("file_type", selectedFile.type);
+    formData.append("language", selectedLanguage);
+
     try {
-      // Prevent multiple uploads by disabling the button during upload
-      setIsModalOpen(false); // Close modal to prevent re-triggering
-      const response = await mockBackend.uploadFile(
-        selectedFile,
-        selectedLanguage
-      );
+      setIsLoading(true); // Set loading state to true during upload
 
-      if (response.status === "success") {
-        // Update state with the newly uploaded file
-        setFiles([
-          ...files,
-          {
-            name: selectedFile.name,
-            type: selectedFile.type,
-            language: selectedLanguage,
-            content: URL.createObjectURL(selectedFile),
-          },
-        ]);
+      const response = await fetch(`${backendUrl}/add_file`, {
+        method: "POST",
+        body: formData,
+      });
 
-        // Reset selectedFile state to prevent multiple uploads
-        setSelectedFile(null);
-        setSelectedLanguage("eng"); // Reset language selection if needed
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
       }
+
+      const data = await response.json();
+      setUploadStatus(data.status); // Set upload status received from backend
+
+      setSelectedFile(null);
+      setSelectedLanguage("en");
+      setIsModalOpen(false);
+      fetchFiles(); // Refresh the file list
     } catch (error) {
-      console.error("Upload failed:", error);
+      console.error("There was a problem with the fetch operation:", error);
+      setUploadStatus(`File upload failed: ${error.message}`);
+    } finally {
+      setIsLoading(false); // Reset loading state after upload completes (or fails)
     }
   };
 
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
-  };
-
-  const filteredFiles = files.filter((file) =>
-    file.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleFileClick = (file: { name: string; content: string }) => {
-    setSelectedFileToView(file.content);
-    setSelectedFileName(file.name); // Track the selected file name
-  };
-
-  const handleCloseFileView = () => {
-    setSelectedFileToView(null); // Close the file viewer
-    setSelectedFileName(null); // Reset selected file name
+  // Function to handle click on a file name
+  const handleFileClick = async (fileName: string) => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${backendUrl}/get_pdf/${fileName}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch PDF");
+      }
+      const pdfUrl = await response.text(); // Assuming the backend returns the PDF file URL as text
+      setSelectedPdfUrl(pdfUrl);
+    } catch (error) {
+      console.error("Error fetching PDF:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -127,72 +128,46 @@ const Library: React.FC = () => {
       {/* Sidebar for category filters on the left */}
       <div className="w-64 bg-gray-900 text-white p-4 flex flex-col">
         <h2 className="text-2xl mb-4">Categories</h2>
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Search files..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="bg-gray-800 text-white p-2 rounded outline-none w-full"
+          />
+        </div>
         <button
           className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded mb-4"
           onClick={handleAddDocument}
         >
           + Add Document
         </button>
-        <input
-          type="text"
-          placeholder="Search..."
-          value={searchTerm}
-          onChange={handleSearchChange}
-          className="mb-4 p-2 rounded"
-        />
       </div>
       {/* Main Content */}
       <div className="flex-1 p-4 bg-gray-700">
-        <h2 className="text-2xl text-white">Files</h2>
-        <ul className="text-white">
+        <h2 className="text-2xl text-white">Content page</h2>
+        <ul className="text-white mt-4">
           {filteredFiles.map((file, index) => (
             <li
               key={index}
-              className="mb-2 cursor-pointer"
+              className="hover:underline cursor-pointer"
               onClick={() => handleFileClick(file)}
             >
-              {file.name}
-              {selectedFileName === file.name && (
-                <div className="bg-gray-900 p-4 mt-4 rounded shadow-lg">
-                  <iframe
-                    src={selectedFileToView}
-                    width={iframeWidth}
-                    height={iframeHeight}
-                    title="File Viewer"
-                  ></iframe>
-                  <div className="flex justify-between mt-2">
-                    <button
-                      className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded"
-                      onClick={handleCloseFileView} // Close button handler
-                    >
-                      Close
-                    </button>
-                    <div>
-                      <label className="mr-2 text-gray-500 font-bold text-lg">
-                        Width:
-                        <input
-                          type="text"
-                          value={iframeWidth}
-                          onChange={(e) => setIframeWidth(e.target.value)}
-                          className="ml-1 p-1 rounded"
-                        />
-                      </label>
-                      <label className="text-gray-500 font-bold text-lg">
-                        Height:
-                        <input
-                          type="text"
-                          value={iframeHeight}
-                          onChange={(e) => setIframeHeight(e.target.value)}
-                          className="ml-1 p-1 rounded"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {file}
             </li>
           ))}
         </ul>
+        {/* Render iframe if a PDF file is selected */}
+        {selectedPdfUrl && (
+          <div className="mt-4">
+            <iframe
+              src={selectedPdfUrl}
+              title="Selected PDF File"
+              className="w-full h-screen border-none"
+            ></iframe>
+          </div>
+        )}
       </div>
       {/* Modal for adding a document */}
       {isModalOpen && (
@@ -201,7 +176,7 @@ const Library: React.FC = () => {
             <h2 className="text-2xl mb-4">Add New Document</h2>
             <input
               type="file"
-              accept=".csv,.docx,.pdf" // Limit file types to CSV, DOCX, PDF
+              accept=".csv,.docx,.pdf,.txt" // Limit file types to CSV, DOCX, PDF
               onChange={handleFileChange}
               className="mb-4"
             />
@@ -210,7 +185,7 @@ const Library: React.FC = () => {
               onChange={handleLanguageChange}
               className="bg-gray-200 p-2 rounded"
             >
-              <option value="eng">English</option>
+              <option value="en">English</option>
               <option value="arabic">Arabic</option>
             </select>
             <div className="flex justify-end mt-4">
@@ -228,6 +203,28 @@ const Library: React.FC = () => {
                 Upload
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex justify-center items-center">
+          <div className="bg-white p-8 rounded shadow-lg">
+            <h2 className="text-2xl">Loading...</h2>
+          </div>
+        </div>
+      )}
+      {/* Status popup */}
+      {uploadStatus && (
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex justify-center items-center">
+          <div className="bg-white p-8 rounded shadow-lg">
+            <h2 className="text-2xl">{uploadStatus}</h2>
+            <button
+              className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded mt-4"
+              onClick={() => setUploadStatus("")}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
