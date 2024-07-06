@@ -1,22 +1,27 @@
+// ChatBot.tsx
 import React, { useState, useEffect } from "react";
+import { useChat } from "./ChatContext";
 
 interface Message {
   message: string;
   type: "text" | "source";
 }
 
-const ChatBot: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+interface Props {
+  backendUrl: string;
+}
+
+const ChatBot: React.FC<Props> = ({ backendUrl }) => {
+  const { messages, setMessages } = useChat();
   const [input, setInput] = useState<string>("");
-  const [backendUrl, setBackendUrl] = useState<string>("");
 
   useEffect(() => {
     // Load configuration file
     fetch("/config.json")
       .then((response) => response.json())
-      .then((data) => setBackendUrl(data.backendUrl))
+      .then((data) => (backendUrl = data.backendUrl))
       .catch((error) => console.error("Error loading config:", error));
-  }, []);
+  }, [backendUrl]);
 
   const handleSendMessage = async () => {
     if (input.trim() !== "") {
@@ -42,7 +47,6 @@ const ChatBot: React.FC = () => {
 
         const data = await response.json();
 
-        // Prepare messages array with both English and Arabic versions and source
         const englishMessage: Message = {
           message: `English Version: ${data.english_version}`,
           type: "text",

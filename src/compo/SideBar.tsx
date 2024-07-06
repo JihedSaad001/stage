@@ -1,10 +1,11 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { CiRepeat } from "react-icons/ci";
+import logo from "../logocrda.png"; // Adjust the path as necessary
 
 const SideBar: React.FC = () => {
   return (
-    <div className="flex  flex-col">
+    <div className="flex flex-col">
       {/* Navigation Bar */}
       <nav className="flex justify-center items-center h-20 bg-gray-900 text-white shadow-lg">
         <ul className="flex justify-center items-center gap-[13vw] text-3xl">
@@ -17,9 +18,11 @@ const SideBar: React.FC = () => {
             </span>
           </li>
           <li className="relative flex items-center justify-center h-16 w-16 bg-gray-800 text-green-500 rounded-full shadow-lg group">
-            <CiRepeat />
+            <Link to="/">
+              <img src={logo} alt="Logo" className="h-12 w-12" />
+            </Link>
             <span className="absolute bottom-full mb-2 hidden text-sm text-white bg-black rounded px-2 py-1 group-hover:block">
-              Repeat
+              Welcome
             </span>
           </li>
           <li className="relative group">
